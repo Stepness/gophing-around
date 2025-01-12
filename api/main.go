@@ -4,40 +4,30 @@ import (
 	"api/handlers"
 	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"net/http"
 	"os"
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const uri = "mongodb://localhost:27017"
+var uri = "mongodb://localhost:27017"
 
 func main() {
 	fmt.Println("Best API started!")
 
 	l := log.New(os.Stdout, "api", log.LstdFlags)
-
 	opts := options.Client().ApplyURI(uri)
-	client, err := mongo.Connect(context.TODO(), opts)
+	ctx := context.Background()
 
-	quickstartDatabase := client.Database("quickstart")
-	podcastsCollection := quickstartDatabase.Collection("podcasts")
-
+	client, err := mongo.Connect(ctx, opts)
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = podcastsCollection.InsertOne(context.TODO(), bson.D{
-		{Key: "title", Value: "The Polyglot Developer Podcast"},
-		{Key: "author", Value: "Nic Raboy"},
-	})
-
 	mux := http.NewServeMux()
 	//ph := handlers.NewProducts(l)
-	pch := handlers.NewPodcast()
+	pch := handlers.NewPodcast(client)
 
 	//mux.Handle("GET /", ph)
 	mux.Handle("/podcast", pch)

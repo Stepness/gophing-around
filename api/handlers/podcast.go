@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"net/http"
 )
 
 type Podcast struct {
+	client *mongo.Client
+}
+
+type PodcastEntity struct {
 	Name   string `bson:"name,omitempty"`
 	Rating int32  `bson:"rating,omitempty"`
 }
 
-const uri = "mongodb://localhost:27017"
-
-func NewPodcast() *Podcast {
-	return &Podcast{}
+func NewPodcast(client *mongo.Client) *Podcast {
+	return &Podcast{client: client}
 }
 
 func (p *Podcast) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
@@ -26,53 +27,50 @@ func (p *Podcast) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	case "/podcast":
 		switch r.Method {
 		case "GET":
-			result := getPodcast()
-			json.NewEncoder(rw).Encode(result)
+			result, err := p.getPodcast(r.Context())
+			if err != nil {
+				json.NewEncoder(rw).Encode(err)
+			} else {
+				json.NewEncoder(rw).Encode(result)
+			}
 		case "POST":
-			createPodcast()
+			var body PodcastEntity
+			json.NewDecoder(r.Body).Decode(&body)
+
+			err := p.createPodcast(body, r.Context())
+
+			if err != nil {
+				json.NewEncoder(rw).Encode(err)
+			} else {
+				json.NewEncoder(rw).Encode("Data added")
+			}
 		}
 	}
 
 }
 
-func getPodcast() []Podcast {
-	var slice []Podcast
+func (p *Podcast) getPodcast(ctx context.Context) ([]PodcastEntity, error) {
+	var slice []PodcastEntity
 
-	opts := options.Client().ApplyURI(uri)
+	podcastsCollection := p.client.Database("quickstart").Collection("podcasts")
 
-	client, err := mongo.Connect(context.TODO(), opts)
-	if err != nil {
-		panic(err)
-	}
-
-	podcastsCollection := client.Database("quickstart").Collection("podcasts")
-
-	cursor, err := podcastsCollection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		panic(err)
-	}
-
-	err = cursor.All(context.TODO(), &slice)
+	cursor, err := podcastsCollection.Find(ctx, bson.D{})
+	defer cursor.Close(ctx)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return slice
+	err = cursor.All(ctx, &slice)
+
+	return slice, err
 }
 
-func createPodcast() {
-	opts := options.Client().ApplyURI(uri)
+func (p *Podcast) createPodcast(entity PodcastEntity, ctx context.Context) error {
+	podcastsCollection := p.client.Database("quickstart").Collection("podcasts")
 
-	client, err := mongo.Connect(context.TODO(), opts)
+	podcast := PodcastEntity{Name: entity.Name, Rating: entity.Rating}
+	_, err := podcastsCollection.InsertOne(ctx, podcast)
 
-	quickstartDatabase := client.Database("quickstart")
-	podcastsCollection := quickstartDatabase.Collection("podcasts")
-
-	if err != nil {
-		panic(err)
-	}
-
-	podcast := Podcast{Name: "Best", Rating: 4}
-	_, err = podcastsCollection.InsertOne(context.TODO(), podcast)
+	return err
 }
