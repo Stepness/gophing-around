@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/stepness/gophing-around/port-scanner/port"
 	"github.com/stepness/gophing-around/port-scanner/portAsync"
+	"sort"
 	"time"
 )
 
@@ -19,6 +20,10 @@ func main() {
 	durationConcurrent := time.Since(startConcurrent)
 
 	fmt.Printf("Async - It took %d ms\n", durationConcurrent.Milliseconds())
+
+	sort.Slice(portsAsync, func(i, j int) bool {
+		return portsAsync[i].Port < portsAsync[j].Port
+	})
 
 	if len(portsAsync) == 0 {
 		fmt.Println("No ports open")
